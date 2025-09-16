@@ -19,7 +19,8 @@ jobs:
           node-version: 18
 
       - name: Install dependencies
-        run: npm install node-fetch
+        run: npm install
+
 
       - name: Run script
         run: node index.js
