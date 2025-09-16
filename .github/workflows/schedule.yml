@@ -1,0 +1,30 @@
+name: Notion → LINE Daily Push
+
+on:
+  schedule:
+    - cron: "0 1 * * *"   # 每天 UTC 01:00（台灣早上 9:00）
+  workflow_dispatch:      # 可手動觸發測試
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install node-fetch
+
+      - name: Run script
+        run: node index.js
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          DATABASE_ID: ${{ secrets.DATABASE_ID }}
+          LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
