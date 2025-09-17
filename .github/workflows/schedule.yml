@@ -1,4 +1,4 @@
-name: Notion → LINE Daily Push
+name: Notion LINE Daily Push
 
 on:
   schedule:
