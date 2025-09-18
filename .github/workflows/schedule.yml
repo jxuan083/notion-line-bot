@@ -2,7 +2,7 @@ name: Notion LINE Daily Push
 
 on:
   schedule:
-    - cron: "0 0 * * *"   #現在先15分鐘測試
+    - cron: "0 0 * * *"   #改成八點因為我叫他九點傳他十點才傳
     # 每天 UTC 01:00（台灣早上 9:00）
   workflow_dispatch:      # 可手動觸發測試
 
