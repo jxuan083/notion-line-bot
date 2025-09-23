@@ -29,12 +29,90 @@ async function getTasks() {
   return data.results.map(page => {
     const title = page.properties.Name.title[0]?.plain_text || "未命名任務";
     const status = page.properties.Status.select?.name || "";
-    return `[${status}] ${title}`;
+    return { title, status };
   });
 }
 
-// 發送 LINE 推播
-async function pushToLine(message) {
+// 發送 LINE Flex Message
+async function pushToLineFlex(tasks) {
+  // 統計數量
+  const total = tasks.length;
+  const todoCount = tasks.filter(t => t.status === "To Do").length;
+  const doingCount = tasks.filter(t => t.status === "Doing").length;
+
+  // 把任務轉換成 Flex 元素
+  const taskContents = tasks.map(task => {
+    let color = "#000000"; // 預設黑
+    if (task.status === "To Do") color = "#1E90FF"; // 藍色
+    if (task.status === "Doing") color = "#32CD32"; // 綠色
+
+    return {
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        {
+          type: "text",
+          text: task.status,
+          size: "sm",
+          color: color,
+          flex: 2,
+          weight: "bold"
+        },
+        {
+          type: "text",
+          text: task.title,
+          size: "sm",
+          color: "#555555",
+          flex: 8,
+          wrap: true
+        }
+      ]
+    };
+  });
+
+  const bubble = {
+    type: "bubble",
+    body: {
+      type: "box",
+      layout: "vertical",
+      contents: [
+        {
+          type: "text",
+          text: "📌 今日任務清單",
+          weight: "bold",
+          size: "lg"
+        },
+        {
+          type: "text",
+          text: `共 ${total} 項（To Do: ${todoCount}, Doing: ${doingCount})`,
+          size: "sm",
+          color: "#888888",
+          margin: "sm"
+        },
+        {
+          type: "separator",
+          margin: "md"
+        },
+        {
+          type: "box",
+          layout: "vertical",
+          margin: "md",
+          spacing: "sm",
+          contents: taskContents.length > 0
+            ? taskContents
+            : [{ type: "text", text: "✅ 今天沒有任務 🎉", size: "sm", color: "#888888" }]
+        }
+      ]
+    }
+  };
+
+  const flexMessage = {
+    type: "flex",
+    altText: "今日任務清單",
+    contents: bubble
+  };
+
   await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: {
@@ -43,7 +121,7 @@ async function pushToLine(message) {
     },
     body: JSON.stringify({
       to: LINE_USER_ID,
-      messages: [{ type: "text", text: message }]
+      messages: [flexMessage]
     })
   });
 }
@@ -51,10 +129,6 @@ async function pushToLine(message) {
 // 主流程
 (async () => {
   const tasks = await getTasks();
-  const message = tasks.length > 0
-    ? `📌 今日任務清單：\n${tasks.join("\n")}`
-    : "✅ 今天沒有任務 🎉";
-
-  await pushToLine(message);
+  await pushToLineFlex(tasks);
   console.log("推播完成！");
 })();
