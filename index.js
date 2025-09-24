@@ -6,7 +6,7 @@ const DATABASE_ID = process.env.DATABASE_ID;
 const LINE_TOKEN = process.env.LINE_TOKEN;
 const LINE_USER_ID = process.env.LINE_USER_ID;
 
-// 抓取 To Do / Doing 任務
+// 抓取 Life / Work / Doing 任務
 async function getTasks() {
   const res = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
     method: "POST",
@@ -18,7 +18,8 @@ async function getTasks() {
     body: JSON.stringify({
       filter: {
         or: [
-          { property: "Status", select: { equals: "To Do" } },
+          { property: "Status", select: { equals: "Life" } },
+          { property: "Status", select: { equals: "Work" } },
           { property: "Status", select: { equals: "Doing" } }
         ]
       }
@@ -37,13 +38,15 @@ async function getTasks() {
 async function pushToLineFlex(tasks) {
   // 統計數量
   const total = tasks.length;
-  const todoCount = tasks.filter(t => t.status === "To Do").length;
+  const lifeCount = tasks.filter(t => t.status === "Life").length;
+  const workCount = tasks.filter(t => t.status === "Work").length;
   const doingCount = tasks.filter(t => t.status === "Doing").length;
 
   // 把任務轉換成 Flex 元素
   const taskContents = tasks.map(task => {
     let color = "#000000"; // 預設黑
-    if (task.status === "To Do") color = "#1E90FF"; // 藍色
+    if (task.status === "Life") color = "#1E90FF";   // 藍色
+    if (task.status === "Work") color = "#FF8C00";  // 橘色
     if (task.status === "Doing") color = "#32CD32"; // 綠色
 
     return {
@@ -85,7 +88,7 @@ async function pushToLineFlex(tasks) {
         },
         {
           type: "text",
-          text: `共 ${total} 項（To Do: ${todoCount}, Doing: ${doingCount})`,
+          text: `共 ${total} 項（Life: ${lifeCount}, Work: ${workCount}, Doing: ${doingCount})`,
           size: "sm",
           color: "#888888",
           margin: "sm"
