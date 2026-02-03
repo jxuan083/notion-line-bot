@@ -11,17 +11,15 @@ const COMMON_HEADERS = {
   "Notion-Version": "2022-06-28"
 };
 
-// --- 1. 月度清理函式 ---
+// --- 1. 月度清理 ---
 async function archiveDoneTasks() {
   const today = new Date();
-  const localDate = new Date(today.getTime() + 8 * 3600000); // 修正為台灣時區
-  
+  const localDate = new Date(today.getTime() + 8 * 3600000);
   if (localDate.getDate() !== 1) {
-    console.log(`[Step 1] 今天是 ${localDate.getDate()} 號，不是 1 號，跳過清理。`);
-    return; // 這裡的 return 只會跳出這個 function，不會終止整個程式
+    console.log(`[Step 1] 今天是 ${localDate.getDate()} 號，跳過清理。`);
+    return;
   }
-
-  console.log("[Step 1] 偵測到 1 號，開始大掃除...");
+  console.log("[Step 1] 1 號大掃除開始...");
   const res = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
     method: "POST",
     headers: COMMON_HEADERS,
@@ -39,9 +37,9 @@ async function archiveDoneTasks() {
   console.log(`[Step 1] 清理完成。`);
 }
 
-// --- 2. 抓取任務函式 ---
+// --- 2. 抓取任務 ---
 async function getTasks() {
-  console.log("[Step 2] 正在抓取今日任務...");
+  console.log("[Step 2] 正在從 Notion 抓取任務...");
   const res = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
     method: "POST",
     headers: COMMON_HEADERS,
@@ -62,26 +60,74 @@ async function getTasks() {
   }));
 }
 
-// --- 3. 推播函式 (請保留你原本的 Flex Message 內容) ---
+// --- 3. 推播函式 (修正：補回 Flex Message 邏輯與錯誤檢查) ---
 async function pushToLineFlex(tasks) {
   console.log(`[Step 3] 準備推播 ${tasks.length} 個任務到 LINE...`);
-  // ... (這裡放你原本那段長長的 bubble 和 fetch LINE 的程式碼) ...
+
+  const taskContents = tasks.map(task => {
+    let color = "#1E90FF"; 
+    if (task.status === "Work") color = "#FF8C00";
+    if (task.status === "Doing") color = "#32CD32";
+
+    return {
+      type: "box",
+      layout: "baseline",
+      spacing: "sm",
+      contents: [
+        { type: "text", text: task.status, size: "sm", color: color, flex: 2, weight: "bold" },
+        { type: "text", text: task.title, size: "sm", color: "#555555", flex: 8, wrap: true }
+      ]
+    };
+  });
+
+  const flexMessage = {
+    type: "flex",
+    altText: "今日任務清單",
+    contents: {
+      type: "bubble",
+      body: {
+        type: "box",
+        layout: "vertical",
+        contents: [
+          { type: "text", text: "📌 今日任務清單", weight: "bold", size: "lg" },
+          { type: "separator", margin: "md" },
+          {
+            type: "box",
+            layout: "vertical",
+            margin: "md",
+            spacing: "sm",
+            contents: taskContents.length > 0 ? taskContents : [{ type: "text", text: "✅ 目前沒事！", size: "sm" }]
+          }
+        ]
+      }
+    }
+  };
+
+  const response = await fetch("https://api.line.me/v2/bot/message/push", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${LINE_TOKEN}`
+    },
+    body: JSON.stringify({ to: LINE_USER_ID, messages: [flexMessage] })
+  });
+
+  const result = await response.json();
+  if (response.ok) {
+    console.log("[Step 3] LINE 訊息發送成功！");
+  } else {
+    console.error("[Step 3] LINE API 報錯了：", JSON.stringify(result));
+  }
 }
 
-// --- 🚀 核心：執行主流程 ---
+// --- 🚀 執行主流程 ---
 (async () => {
   try {
-    // 步驟 A: 嘗試清理（只有 1 號會動）
     await archiveDoneTasks();
-    
-    // 步驟 B: 抓取任務（每天都會執行）
     const tasks = await getTasks();
-    
-    // 步驟 C: 發送推播（每天都會執行）
     await pushToLineFlex(tasks);
-    
     console.log("🎉 全部執行完畢！");
   } catch (error) {
-    console.error("❌ 發生錯誤：", error);
+    console.error("❌ 流程中斷：", error);
   }
 })();
