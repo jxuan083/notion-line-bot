@@ -1,6 +1,6 @@
 import fetch from "node-fetch";
 
-// === Secrets 從 GitHub Actions 環境變數讀取 ===
+// === Secrets ===
 const NOTION_TOKEN = process.env.NOTION_TOKEN;
 const DATABASE_ID = process.env.DATABASE_ID;
 const LINE_TOKEN = process.env.LINE_TOKEN;
@@ -12,18 +12,25 @@ const COMMON_HEADERS = {
   "Notion-Version": "2022-06-28"
 };
 
-// 1. 新增功能：自動刪除（封存）已完成的任務
+// 1. 自動刪除（封存）：只在每月 1 號執行
 async function archiveDoneTasks() {
-  console.log("正在檢查是否有已完成的任務需要清理...");
+  const today = new Date();
+  const timezoneOffset = 8; // 台灣時區
+  const localDate = new Date(today.getTime() + timezoneOffset * 3600000);
+  
+  // 判斷是否為每月 1 號
+  if (localDate.getDate() !== 1) {
+    console.log(`今天日期為 ${localDate.getDate()} 號，尚未到月度清理日。`);
+    return;
+  }
+
+  console.log("📅 每月 1 號大掃除啟動！正在清理已完成任務...");
   
   const res = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
     method: "POST",
     headers: COMMON_HEADERS,
     body: JSON.stringify({
-      filter: {
-        property: "Status",
-        select: { equals: "Done" } // 👈 這裡假設你的完成標籤叫做 "Done"
-      }
+      filter: { property: "Status", select: { equals: "Done" } }
     })
   });
 
@@ -36,11 +43,11 @@ async function archiveDoneTasks() {
       headers: COMMON_HEADERS,
       body: JSON.stringify({ archived: true })
     });
-    console.log(`✅ 已清理任務：${page.properties.Name.title[0]?.plain_text || page.id}`);
   }
+  console.log(`✅ 月度清理完成，共移除 ${tasksToDelete.length} 個任務。`);
 }
 
-// 2. 抓取 Life / Work / Doing 任務
+// 2. 抓取任務 (維持原本邏輯)
 async function getTasks() {
   const res = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
     method: "POST",
@@ -55,85 +62,29 @@ async function getTasks() {
       }
     })
   });
-
   const data = await res.json();
-  return (data.results || []).map(page => {
-    const title = page.properties.Name.title[0]?.plain_text || "未命名任務";
-    const status = page.properties.Status.select?.name || "";
-    return { title, status };
-  });
+  return (data.results || []).map(page => ({
+    title: page.properties.Name.title[0]?.plain_text || "未命名任務",
+    status: page.properties.Status.select?.name || ""
+  }));
 }
 
-// 3. 發送 LINE Flex Message (這部分保持你原本的邏輯)
+// 3. 推播到 LINE (維持原本邏輯，這裡省略重複代碼，請保留你原本的 pushToLineFlex 函式內容)
 async function pushToLineFlex(tasks) {
-  const total = tasks.length;
-  const lifeCount = tasks.filter(t => t.status === "Life").length;
-  const workCount = tasks.filter(t => t.status === "Work").length;
-  const doingCount = tasks.filter(t => t.status === "Doing").length;
-
-  const taskContents = tasks.map(task => {
-    let color = "#000000";
-    if (task.status === "Life") color = "#1E90FF";
-    if (task.status === "Work") color = "#FF8C00";
-    if (task.status === "Doing") color = "#32CD32";
-
-    return {
-      type: "box",
-      layout: "baseline",
-      spacing: "sm",
-      contents: [
-        { type: "text", text: task.status, size: "sm", color: color, flex: 2, weight: "bold" },
-        { type: "text", text: task.title, size: "sm", color: "#555555", flex: 8, wrap: true }
-      ]
-    };
-  });
-
-  const bubble = {
-    type: "bubble",
-    body: {
-      type: "box",
-      layout: "vertical",
-      contents: [
-        { type: "text", text: "📌 今日任務清單", weight: "bold", size: "lg" },
-        { type: "text", text: `共 ${total} 項（Life: ${lifeCount}, Work: ${workCount}, Doing: ${doingCount})`, size: "sm", color: "#888888", margin: "sm" },
-        { type: "separator", margin: "md" },
-        {
-          type: "box",
-          layout: "vertical",
-          margin: "md",
-          spacing: "sm",
-          contents: taskContents.length > 0 
-            ? taskContents 
-            : [{ type: "text", text: "✅ 今天沒有任務 🎉", size: "sm", color: "#888888" }]
-        }
-      ]
-    }
-  };
-
-  await fetch("https://api.line.me/v2/bot/message/push", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${LINE_TOKEN}`
-    },
-    body: JSON.stringify({
-      to: LINE_USER_ID,
-      messages: [{ type: "flex", altText: "今日任務清單", contents: bubble }]
-    })
-  });
+  // ... (請將你原本發送 Flex Message 的程式碼貼回這裡) ...
 }
 
 // --- 主流程 ---
 (async () => {
   try {
-    // 先清理 Done 的任務
+    // 每天都會嘗試執行，但內部有日期判斷，只有 1 號會真的刪除
     await archiveDoneTasks();
     
-    // 再抓取剩餘任務並推播
+    // 每天都會執行的推播
     const tasks = await getTasks();
     await pushToLineFlex(tasks);
     
-    console.log("所有動作執行完成！");
+    console.log("今日自動化任務執行完畢！");
   } catch (error) {
     console.error("發生錯誤：", error);
   }
